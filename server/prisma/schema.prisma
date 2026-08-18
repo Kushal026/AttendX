@@ -1,0 +1,526 @@
+// =============================================================================
+// SMART ATTENDANCE MANAGEMENT SYSTEM - PRISMA SCHEMA (PHASE 2)
+// Database: PostgreSQL 14+
+// ORM: Prisma 7.x
+// Generated: 2026-08-18
+// =============================================================================
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum Role {
+  ADMIN
+  FACULTY
+  STUDENT
+}
+
+enum DegreeType {
+  B_TECH
+  B_E
+  M_TECH
+  B_SC
+  M_SC
+  MBA
+  MCA
+}
+
+enum SubjectType {
+  THEORY
+  LAB
+  ELECTIVE
+  SEMINAR
+}
+
+enum EnrollmentStatus {
+  ENROLLED
+  DROPPED
+  COMPLETED
+}
+
+enum ClassSessionStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+// Phase 2: Required session statuses per spec
+enum AttendanceSessionStatus {
+  ACTIVE      // Session is open; students can scan QR
+  EXPIRED     // Time window elapsed; auto-absent not yet run
+  FINALIZED   // Auto-absent processed; session closed permanently
+  CANCELLED   // Manually cancelled by faculty before any scans
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum AttendanceMethod {
+  QR_SCAN         // Student scanned dynamic QR
+  MANUAL_FACULTY  // Faculty marked manually
+  AUTO_ABSENT     // System auto-marked after session expiry
+  RFID_CARD       // Future: RFID hardware
+}
+
+enum NotificationType {
+  INFO
+  WARNING
+  ALERT
+  ATTENDANCE
+  SYSTEM
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  OVERRIDE   // Faculty manually overrides attendance
+  AUTO_MARK  // System-generated record (auto-absent)
+}
+
+// =============================================================================
+// ENTITY MODELS
+// =============================================================================
+
+// 1. USERS — Central auth table for all roles
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password_hash String
+  full_name     String
+  role          Role
+  phone         String?
+  avatar_url    String?
+  is_active     Boolean   @default(true)
+  last_login_at DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  // Relations
+  student       Student?
+  faculty       Faculty?
+  notifications Notification[]
+  audit_logs    AttendanceAuditLog[] @relation("AuditPerformer")
+  settings_mod  SystemSetting[]
+
+  @@index([email])
+  @@index([role])
+  @@index([is_active])
+  @@map("users")
+}
+
+// 2. DEPARTMENTS
+model Department {
+  id                    String   @id @default(uuid())
+  code                  String   @unique
+  name                  String
+  description           String?
+  head_of_department_id String?
+  is_active             Boolean  @default(true)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+
+  // Relations
+  courses   Course[]
+  faculties Faculty[]
+  students  Student[]
+
+  @@index([code])
+  @@map("departments")
+}
+
+// 3. COURSES
+model Course {
+  id              String     @id @default(uuid())
+  department_id   String
+  code            String     @unique
+  name            String
+  degree_type     DegreeType
+  total_semesters Int        @default(8)
+  is_active       Boolean    @default(true)
+  created_at      DateTime   @default(now())
+  updated_at      DateTime   @updatedAt
+
+  // Relations
+  department Department @relation(fields: [department_id], references: [id], onDelete: Restrict)
+  semesters  Semester[]
+  subjects   Subject[]
+  students   Student[]
+
+  @@index([department_id])
+  @@map("courses")
+}
+
+// 4. SEMESTERS
+model Semester {
+  id              String   @id @default(uuid())
+  course_id       String
+  semester_number Int
+  academic_year   String
+  is_current      Boolean  @default(false)
+  start_date      DateTime
+  end_date        DateTime
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  // Relations
+  course   Course    @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  sections Section[]
+  subjects Subject[]
+  students Student[]
+
+  @@unique([course_id, semester_number, academic_year])
+  @@index([course_id])
+  @@index([is_current])
+  @@map("semesters")
+}
+
+// 5. SECTIONS
+model Section {
+  id          String   @id @default(uuid())
+  semester_id String
+  name        String
+  capacity    Int      @default(60)
+  room_number String?
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  semester         Semester         @relation(fields: [semester_id], references: [id], onDelete: Cascade)
+  students         Student[]
+  faculty_subjects FacultySubject[]
+  student_subjects StudentSubject[]
+  class_sessions   ClassSession[]
+
+  @@unique([semester_id, name])
+  @@index([semester_id])
+  @@map("sections")
+}
+
+// 6. FACULTY PROFILES
+model Faculty {
+  id             String   @id @default(uuid())
+  user_id        String   @unique
+  employee_id    String   @unique
+  department_id  String
+  designation    String
+  qualification  String
+  specialization String?
+  joining_date   DateTime
+  office_room    String?
+  is_active      Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  // Relations
+  user                User                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  department          Department          @relation(fields: [department_id], references: [id], onDelete: Restrict)
+  faculty_subjects    FacultySubject[]
+  class_sessions      ClassSession[]
+  attendance_sessions AttendanceSession[]
+
+  @@index([department_id])
+  @@index([employee_id])
+  @@map("faculty")
+}
+
+// 7. STUDENT PROFILES
+model Student {
+  id              String    @id @default(uuid())
+  user_id         String    @unique
+  roll_number     String    @unique
+  register_number String    @unique
+  department_id   String
+  course_id       String
+  semester_id     String
+  section_id      String
+  batch_year      String
+  admission_date  DateTime?
+  parent_name     String?
+  parent_contact  String?
+  current_gpa     Decimal?  @db.Decimal(3, 2)
+  is_active       Boolean   @default(true)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  // Relations
+  user             User             @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  department       Department       @relation(fields: [department_id], references: [id], onDelete: Restrict)
+  course           Course           @relation(fields: [course_id], references: [id], onDelete: Restrict)
+  semester         Semester         @relation(fields: [semester_id], references: [id], onDelete: Restrict)
+  section          Section          @relation(fields: [section_id], references: [id], onDelete: Restrict)
+  student_subjects StudentSubject[]
+  attendance_logs  Attendance[]
+
+  @@index([roll_number])
+  @@index([register_number])
+  @@index([section_id])
+  @@index([department_id])
+  @@map("students")
+}
+
+// 8. SUBJECTS
+model Subject {
+  id           String      @id @default(uuid())
+  course_id    String
+  semester_id  String
+  code         String      @unique
+  name         String
+  credit_hours Int         @default(3)
+  type         SubjectType @default(THEORY)
+  syllabus_url String?
+  is_active    Boolean     @default(true)
+  created_at   DateTime    @default(now())
+  updated_at   DateTime    @updatedAt
+
+  // Relations
+  course           Course           @relation(fields: [course_id], references: [id], onDelete: Cascade)
+  semester         Semester         @relation(fields: [semester_id], references: [id], onDelete: Restrict)
+  faculty_subjects FacultySubject[]
+  student_subjects StudentSubject[]
+  class_sessions   ClassSession[]
+
+  @@index([course_id])
+  @@index([semester_id])
+  @@map("subjects")
+}
+
+// 9. FACULTY <-> SUBJECT ASSIGNMENTS
+model FacultySubject {
+  id            String   @id @default(uuid())
+  faculty_id    String
+  subject_id    String
+  section_id    String
+  academic_year String
+  is_primary    Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  // Relations
+  faculty Faculty @relation(fields: [faculty_id], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [section_id], references: [id], onDelete: Cascade)
+
+  @@unique([faculty_id, subject_id, section_id, academic_year])
+  @@index([faculty_id])
+  @@index([subject_id])
+  @@index([section_id])
+  @@map("faculty_subjects")
+}
+
+// 10. STUDENT <-> SUBJECT ENROLLMENTS
+model StudentSubject {
+  id            String           @id @default(uuid())
+  student_id    String
+  subject_id    String
+  section_id    String
+  academic_year String
+  status        EnrollmentStatus @default(ENROLLED)
+  created_at    DateTime         @default(now())
+  updated_at    DateTime         @updatedAt
+
+  // Relations
+  student Student @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subject_id], references: [id], onDelete: Cascade)
+  section Section @relation(fields: [section_id], references: [id], onDelete: Cascade)
+
+  @@unique([student_id, subject_id, academic_year])
+  @@index([student_id])
+  @@index([subject_id])
+  @@map("student_subjects")
+}
+
+// 11. CLASS SESSIONS (scheduled timetable entry)
+model ClassSession {
+  id         String             @id @default(uuid())
+  subject_id String
+  faculty_id String
+  section_id String
+  date       DateTime           @db.Date
+  start_time String
+  end_time   String
+  room       String
+  topic      String?
+  status     ClassSessionStatus @default(SCHEDULED)
+  created_at DateTime           @default(now())
+  updated_at DateTime           @updatedAt
+
+  // Relations
+  subject             Subject             @relation(fields: [subject_id], references: [id], onDelete: Restrict)
+  faculty             Faculty             @relation(fields: [faculty_id], references: [id], onDelete: Restrict)
+  section             Section             @relation(fields: [section_id], references: [id], onDelete: Restrict)
+  attendance_sessions AttendanceSession[]
+
+  @@index([faculty_id, date])
+  @@index([section_id, date])
+  @@index([status])
+  @@map("class_sessions")
+}
+
+// 12. ATTENDANCE SESSIONS — QR session lifecycle
+//
+//   Flow: Faculty -> AttendanceSession (ACTIVE)
+//         -> Dynamic QR (rotates every qr_rotation_seconds)
+//         -> Student Scan -> Attendance record (PRESENT/LATE)
+//         -> expires_at reached -> status = EXPIRED
+//         -> Auto-absent job runs -> missing students get ABSENT record
+//         -> status = FINALIZED
+//
+model AttendanceSession {
+  id               String @id @default(uuid())
+  class_session_id String
+  faculty_id       String
+
+  // Security & QR token fields
+  session_token       String  @unique   // Signed token for API calls
+  qr_payload_hash     String            // SHA-256 hash of latest QR payload
+  qr_secret_key       String            // HMAC secret for QR signing (server-side only)
+  qr_rotation_seconds Int     @default(15)
+
+  // Timing
+  start_time DateTime
+  end_time   DateTime?  // Set when faculty manually closes or FINALIZED
+  expires_at DateTime   // Hard deadline for student scanning
+
+  // Status lifecycle: ACTIVE -> EXPIRED -> FINALIZED  (or ACTIVE -> CANCELLED)
+  status AttendanceSessionStatus @default(ACTIVE)
+
+  // Counters (kept in sync by triggers / application logic)
+  total_enrolled        Int     @default(0)
+  total_present         Int     @default(0)
+  total_absent          Int     @default(0)
+  total_late            Int     @default(0)
+  auto_absent_processed Boolean @default(false)
+
+  // Metadata
+  cancelled_reason String?
+  finalized_at     DateTime?
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+
+  // Relations
+  class_session ClassSession @relation(fields: [class_session_id], references: [id], onDelete: Cascade)
+  faculty       Faculty      @relation(fields: [faculty_id], references: [id], onDelete: Restrict)
+  attendances   Attendance[]
+
+  @@index([status])
+  @@index([session_token])
+  @@index([faculty_id])
+  @@index([expires_at])
+  @@map("attendance_sessions")
+}
+
+// 13. ATTENDANCE RECORDS
+//   DB-level UNIQUE(attendance_session_id, student_id) prevents duplicate
+//   attendance for the same student in the same attendance session.
+model Attendance {
+  id                    String           @id @default(uuid())
+  attendance_session_id String
+  student_id            String
+  marked_at             DateTime         @default(now())
+  status                AttendanceStatus
+  method                AttendanceMethod
+
+  // Evidence
+  ip_address    String?
+  device_info   String?
+  geo_latitude  Decimal? @db.Decimal(10, 8)
+  geo_longitude Decimal? @db.Decimal(11, 8)
+  user_agent    String?
+
+  // Override / verification
+  verified_by String?
+  notes       String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  attendance_session AttendanceSession     @relation(fields: [attendance_session_id], references: [id], onDelete: Cascade)
+  student            Student              @relation(fields: [student_id], references: [id], onDelete: Cascade)
+  audit_logs         AttendanceAuditLog[]
+
+  // CORE CONSTRAINT: one record per student per session (DB-level)
+  @@unique([attendance_session_id, student_id])
+
+  @@index([student_id])
+  @@index([status])
+  @@index([marked_at])
+  @@map("attendance")
+}
+
+// 14. NOTIFICATIONS
+model Notification {
+  id          String           @id @default(uuid())
+  user_id     String
+  title       String
+  message     String
+  type        NotificationType @default(INFO)
+  is_read     Boolean          @default(false)
+  read_at     DateTime?
+  action_link String?
+  metadata    Json?
+  created_at  DateTime         @default(now())
+
+  // Relations
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@index([created_at])
+  @@map("notifications")
+}
+
+// 15. ATTENDANCE AUDIT LOGS — immutable change trail
+model AttendanceAuditLog {
+  id              String            @id @default(uuid())
+  attendance_id   String
+  performed_by    String
+  action          AuditAction
+  previous_status AttendanceStatus?
+  new_status      AttendanceStatus
+  reason          String?
+  ip_address      String?
+  metadata        Json?
+  created_at      DateTime          @default(now())
+
+  // Relations
+  attendance Attendance @relation(fields: [attendance_id], references: [id], onDelete: Cascade)
+  user       User       @relation("AuditPerformer", fields: [performed_by], references: [id], onDelete: Restrict)
+
+  @@index([attendance_id])
+  @@index([performed_by])
+  @@index([created_at])
+  @@map("attendance_audit_logs")
+}
+
+// 16. SYSTEM SETTINGS
+model SystemSetting {
+  id            String   @id @default(uuid())
+  setting_key   String   @unique
+  setting_value String
+  category      String   @default("GENERAL")
+  description   String?
+  is_public     Boolean  @default(false)
+  updated_by    String?
+  updated_at    DateTime @default(now()) @updatedAt
+
+  // Relations
+  user User? @relation(fields: [updated_by], references: [id], onDelete: SetNull)
+
+  @@index([category])
+  @@map("system_settings")
+}
