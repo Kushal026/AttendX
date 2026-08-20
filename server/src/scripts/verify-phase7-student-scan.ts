@@ -517,7 +517,7 @@ async function runPhase7Tests() {
 
     // ── TEST 18: Zero ABSENT Records Created in Phase 7 ──
     const absentRecordsCount = await prisma.attendance.count({
-      where: { status: 'ABSENT' },
+      where: { attendance_session_id: attendanceSession.id, status: 'ABSENT' },
     });
     logTest(
       18,

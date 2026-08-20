@@ -564,3 +564,222 @@
   background-color: var(--primary-500);
   color: #ffffff;
 }
+
+/* ============================================================================
+   MOBILE-FIRST QR SCANNER COMPONENT
+============================================================================ */
+.mobile-scanner-wrapper {
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.scanner-card {
+  position: relative;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xl, 16px);
+  box-shadow: 0 10px 30px -5px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.scanner-viewfinder-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  max-height: 380px;
+  background-color: #090d16;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.85);
+}
+
+/* Ensure html5-qrcode video element takes full space nicely */
+#qr-reader {
+  width: 100% !important;
+  height: 100% !important;
+  border: none !important;
+  background-color: transparent !important;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 12px;
+}
+
+#qr-reader__scan_region {
+  background: transparent !important;
+}
+
+#qr-reader img {
+  display: none !important;
+}
+
+/* Dynamic Targeting Box */
+.scanner-target-box {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 72%;
+  height: 72%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Glowing Corner Focus Brackets */
+.scanner-corner {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-color: #ea580c;
+  border-style: solid;
+}
+
+.scanner-corner-tl {
+  top: 0;
+  left: 0;
+  border-width: 3.5px 0 0 3.5px;
+  border-top-left-radius: 8px;
+}
+
+.scanner-corner-tr {
+  top: 0;
+  right: 0;
+  border-width: 3.5px 3.5px 0 0;
+  border-top-right-radius: 8px;
+}
+
+.scanner-corner-bl {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 3.5px 3.5px;
+  border-bottom-left-radius: 8px;
+}
+
+.scanner-corner-br {
+  bottom: 0;
+  right: 0;
+  border-width: 0 3.5px 3.5px 0;
+  border-bottom-right-radius: 8px;
+}
+
+/* Laser Scan Animation */
+.scanner-laser-beam {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(234, 88, 12, 0) 0%, #ea580c 50%, rgba(234, 88, 12, 0) 100%);
+  box-shadow: 0 0 12px 2px rgba(234, 88, 12, 0.75);
+  border-radius: 50%;
+  animation: scanLaser 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  z-index: 6;
+  pointer-events: none;
+}
+
+@keyframes scanLaser {
+  0% {
+    top: 6%;
+    opacity: 0.2;
+  }
+  15% {
+    opacity: 1;
+  }
+  50% {
+    top: 92%;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 6%;
+    opacity: 0.2;
+  }
+}
+
+/* Floating In-Viewfinder Quick Actions */
+.scanner-floating-toolbar {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 0.6rem;
+  z-index: 8;
+}
+
+.scanner-pill-btn {
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  padding: 0.4rem 0.85rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  min-height: 36px;
+}
+
+.scanner-pill-btn:hover {
+  background: rgba(15, 23, 42, 0.95);
+  border-color: rgba(234, 88, 12, 0.6);
+  color: #fed7aa;
+}
+
+.scanner-pill-btn.active {
+  background: #ea580c;
+  border-color: #ea580c;
+  color: #ffffff;
+}
+
+/* Permission Step Cards */
+.perm-guide-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+  text-align: left;
+}
+
+.perm-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+  color: #334155;
+  line-height: 1.4;
+}
+
+.perm-guide-step:last-child {
+  margin-bottom: 0;
+}
+
+.perm-step-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: #ea580c;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+

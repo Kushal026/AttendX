@@ -8,8 +8,7 @@ import {
   StudentSubject,
   ClassSession,
 } from '../types';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './api.config';
 
 class AcademicService {
   // ── DEPARTMENTS ──

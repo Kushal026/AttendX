@@ -1,6 +1,5 @@
 import { SystemSetting } from '../types';
-
-const API_BASE = 'http://localhost:5000/api/v1';
+import { API_BASE } from './api.config';
 
 class SettingsService {
   async getSettings(): Promise<SystemSetting[]> {
