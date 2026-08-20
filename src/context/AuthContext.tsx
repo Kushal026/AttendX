@@ -362,11 +362,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // 3. Automatically sign in with newly created credentials
-      return await login({
-        email: signupData.email,
-        password: signupData.password,
-      });
+      // 3. Return success without auto-logging in (user must manually login)
+      setIsLoading(false);
+      return { success: true };
     } catch (err: any) {
       console.error('[Auth] Signup error:', err);
       const errMsg = err.message || 'An unexpected error occurred during registration.';

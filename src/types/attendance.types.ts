@@ -31,6 +31,7 @@ export interface AttendanceSession {
   updated_at: string;
   // Joined relational data
   class_session?: ClassSession;
+  faculty?: import('./user.types').FacultyProfile;
 }
 
 export type AttendanceStatus = 'PRESENT' | 'ABSENT' | 'LATE' | 'EXCUSED';

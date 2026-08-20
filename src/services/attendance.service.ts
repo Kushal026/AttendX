@@ -4,8 +4,32 @@ import {
   AttendanceSummary,
 } from '../types';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { API_BASE } from './api.config';
+
+export interface AdminAttendanceOverviewKPI {
+  totalSessions: number;
+  activeSessions: number;
+  finalizedSessions: number;
+  cancelledSessions: number;
+  totalPresent: number;
+  totalAbsent: number;
+  overallRate: number;
+  isReadOnly: boolean;
+}
 
 class AttendanceService {
+  async getAdminOverview(): Promise<AdminAttendanceOverviewKPI | null> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/attendance-overview`);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.error('Failed to fetch admin attendance overview:', err);
+    }
+    return null;
+  }
+
   async getActiveSessions(): Promise<AttendanceSession[]> {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase
@@ -21,7 +45,27 @@ class AttendanceService {
     if (isSupabaseConfigured) {
       const { data, error } = await supabase
         .from('attendance_sessions')
-        .select('*, class_session:class_sessions(*, subject:subjects(*), section:sections(*))')
+        .select(`
+          *,
+          class_session:class_sessions (
+            *,
+            subject:subjects (*),
+            section:sections (
+              *,
+              semester:semesters (
+                *,
+                course:courses (
+                  *,
+                  department:departments (*)
+                )
+              )
+            )
+          ),
+          faculty:faculty (
+            *,
+            user:users (*)
+          )
+        `)
         .order('start_time', { ascending: false });
       if (!error && data) return data as AttendanceSession[];
     }

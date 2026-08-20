@@ -20,6 +20,7 @@ import { AdminAssignmentsPage } from '../pages/admin/AdminAssignmentsPage';
 import { AdminAuditLogsPage } from '../pages/admin/AdminAuditLogsPage';
 import { AdminReportsPage } from '../pages/admin/AdminReportsPage';
 import { AdminSettingsPage } from '../pages/admin/AdminSettingsPage';
+import { AdminAttendancePage } from '../pages/admin/AdminAttendancePage';
 
 // Faculty Pages
 import { FacultyDashboard } from '../pages/faculty/FacultyDashboard';
@@ -69,17 +70,7 @@ export const AppRoutes: React.FC = () => {
         <Route path="audit-logs" element={<AdminAuditLogsPage />} />
         <Route path="reports" element={<AdminReportsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
-        <Route
-          path="attendance"
-          element={
-            <div style={{ padding: '2rem', textAlign: 'center' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a' }}>Live QR Attendance Engine</h2>
-              <p style={{ color: '#64748b', marginTop: '0.5rem' }}>
-                Attendance session generation and dynamic QR scanning are scheduled for Phase 6.
-              </p>
-            </div>
-          }
-        />
+        <Route path="attendance" element={<AdminAttendancePage />} />
       </Route>
 
       {/* FACULTY PROTECTED ROUTES (/faculty/*) — STRICTLY FACULTY ONLY */}

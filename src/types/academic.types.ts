@@ -22,6 +22,7 @@ export interface Course {
   created_at: string;
   updated_at: string;
   department?: Department;
+  department_name?: string;
 }
 
 export interface Semester {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { Card, CardHeader, CardBody } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -13,6 +13,8 @@ import {
   Power,
   X,
   AlertCircle,
+  Eye,
+  Users,
 } from 'lucide-react';
 
 export const AdminStudentsPage: React.FC = () => {
@@ -28,10 +30,19 @@ export const AdminStudentsPage: React.FC = () => {
   const [filterDept, setFilterDept] = useState('');
   const [filterCourse, setFilterCourse] = useState('');
 
-  // Modal State
+  // Modal State: Add/Edit
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Modal State: View Details
+  const [viewStudent, setViewStudent] = useState<StudentProfile | null>(null);
+
+  // Modal State: Bulk Section Assign
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [bulkSectionId, setBulkSectionId] = useState('');
+  const [bulkSuccessMsg, setBulkSuccessMsg] = useState<string | null>(null);
 
   // Form State
   const [fullName, setFullName] = useState('');
@@ -79,6 +90,52 @@ export const AdminStudentsPage: React.FC = () => {
     loadData();
   }, [filterDept, filterCourse, search]);
 
+  // Form Cascading Dropdowns
+  const formCourses = useMemo(() => {
+    if (!deptId) return courses;
+    return courses.filter((c) => c.department_id === deptId);
+  }, [courses, deptId]);
+
+  const formSemesters = useMemo(() => {
+    if (!courseId) return semesters;
+    return semesters.filter((s) => s.course_id === courseId);
+  }, [semesters, courseId]);
+
+  const formSections = useMemo(() => {
+    if (!semesterId) return sections;
+    return sections.filter((sec) => sec.semester_id === semesterId);
+  }, [sections, semesterId]);
+
+  const handleDeptChange = (newDeptId: string) => {
+    setDeptId(newDeptId);
+    const crss = courses.filter((c) => c.department_id === newDeptId);
+    if (crss.length > 0) {
+      setCourseId(crss[0].id);
+      const sems = semesters.filter((s) => s.course_id === crss[0].id);
+      if (sems.length > 0) {
+        setSemesterId(sems[0].id);
+        const secs = sections.filter((sec) => sec.semester_id === sems[0].id);
+        if (secs.length > 0) setSectionId(secs[0].id);
+      }
+    }
+  };
+
+  const handleCourseChange = (newCourseId: string) => {
+    setCourseId(newCourseId);
+    const sems = semesters.filter((s) => s.course_id === newCourseId);
+    if (sems.length > 0) {
+      setSemesterId(sems[0].id);
+      const secs = sections.filter((sec) => sec.semester_id === sems[0].id);
+      if (secs.length > 0) setSectionId(secs[0].id);
+    }
+  };
+
+  const handleSemesterChange = (newSemId: string) => {
+    setSemesterId(newSemId);
+    const secs = sections.filter((sec) => sec.semester_id === newSemId);
+    if (secs.length > 0) setSectionId(secs[0].id);
+  };
+
   const handleOpenAddModal = () => {
     setIsEditing(false);
     setEditingId(null);
@@ -89,6 +146,7 @@ export const AdminStudentsPage: React.FC = () => {
     setRollNumber('');
     setRegisterNumber('');
     setFormError(null);
+    if (departments.length > 0) handleDeptChange(departments[0].id);
     setIsModalOpen(true);
   };
 
@@ -173,7 +231,62 @@ export const AdminStudentsPage: React.FC = () => {
     loadData();
   };
 
+  // Bulk Section Assign
+  const handleBulkAssign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkSectionId || selectedStudentIds.length === 0) return;
+
+    setIsSubmitting(true);
+    const res = await academicService.bulkAssignStudentsToSection({
+      student_ids: selectedStudentIds,
+      section_id: bulkSectionId,
+    });
+
+    setIsSubmitting(false);
+    if (res.success) {
+      setBulkSuccessMsg(`Successfully reassigned ${res.count || selectedStudentIds.length} students.`);
+      setTimeout(() => {
+        setBulkSuccessMsg(null);
+        setIsBulkModalOpen(false);
+        setSelectedStudentIds([]);
+        loadData();
+      }, 1500);
+    }
+  };
+
+  const toggleSelectStudent = (id: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedStudentIds.length === students.length) {
+      setSelectedStudentIds([]);
+    } else {
+      setSelectedStudentIds(students.map((s) => s.id));
+    }
+  };
+
   const columns: Column<StudentProfile>[] = [
+    {
+      header: (
+        <input
+          type="checkbox"
+          checked={selectedStudentIds.length > 0 && selectedStudentIds.length === students.length}
+          onChange={toggleSelectAll}
+          style={{ cursor: 'pointer' }}
+        />
+      ) as any,
+      render: (s) => (
+        <input
+          type="checkbox"
+          checked={selectedStudentIds.includes(s.id)}
+          onChange={() => toggleSelectStudent(s.id)}
+          style={{ cursor: 'pointer' }}
+        />
+      ),
+    },
     {
       header: 'Student Name & Email',
       render: (s) => (
@@ -193,7 +306,7 @@ export const AdminStudentsPage: React.FC = () => {
       header: 'Department & Program',
       render: (s) => (
         <div style={{ display: 'flex', flexDirection: 'column', fontSize: '0.8125rem' }}>
-          <span style={{ fontWeight: 600, color: '#1e293b' }}>{s.department_name || 'CSE'}</span>
+          <span style={{ fontWeight: 600, color: '#1e293b' }}>{s.department_name || 'Engineering'}</span>
           <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{s.course_name || 'B.Tech'}</span>
         </div>
       ),
@@ -202,7 +315,7 @@ export const AdminStudentsPage: React.FC = () => {
       header: 'Semester & Section',
       render: (s) => (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-          <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Sem {s.semester_number || 6}</span>
+          <span style={{ fontSize: '0.8125rem', fontWeight: 600 }}>Sem {s.semester_number || 1}</span>
           <Badge variant="info">{s.section_name || 'Section A'}</Badge>
         </div>
       ),
@@ -218,7 +331,16 @@ export const AdminStudentsPage: React.FC = () => {
     {
       header: 'Actions',
       render: (s) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setViewStudent(s)}
+            icon={<Eye size={12} />}
+          >
+            View
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -245,12 +367,23 @@ export const AdminStudentsPage: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Student Management"
-        subtitle="Manage student enrollment, section cohorts, academic profiles, and account statuses"
+        title="Student Enrollment & Registry"
+        subtitle="Manage student enrollment, hierarchical department cohorts, section allocations, and account statuses"
         actions={
-          <Button variant="primary" onClick={handleOpenAddModal} icon={<UserPlus size={16} />}>
-            Add Student
-          </Button>
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {selectedStudentIds.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setIsBulkModalOpen(true)}
+                icon={<Users size={16} />}
+              >
+                Bulk Assign Section ({selectedStudentIds.length})
+              </Button>
+            )}
+            <Button variant="primary" onClick={handleOpenAddModal} icon={<UserPlus size={16} />}>
+              Enroll New Student
+            </Button>
+          </div>
         }
       />
 
@@ -274,9 +407,9 @@ export const AdminStudentsPage: React.FC = () => {
               onChange={(e) => setFilterDept(e.target.value)}
               style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
             >
-              <option value="">All Departments</option>
+              <option value="">All Departments ({departments.length})</option>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>{d.name}</option>
+                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
               ))}
             </select>
 
@@ -285,7 +418,7 @@ export const AdminStudentsPage: React.FC = () => {
               onChange={(e) => setFilterCourse(e.target.value)}
               style={{ padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
             >
-              <option value="">All Programs</option>
+              <option value="">All Degree Programs ({courses.length})</option>
               {courses.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
@@ -304,7 +437,7 @@ export const AdminStudentsPage: React.FC = () => {
             </div>
           ) : students.length === 0 ? (
             <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>
-              No students found. Click "Add Student" to enroll a new student.
+              No students found. Click "Enroll New Student" to enroll a student.
             </div>
           ) : (
             <Table data={students} columns={columns} keyExtractor={(s) => s.id} />
@@ -312,7 +445,141 @@ export const AdminStudentsPage: React.FC = () => {
         </CardBody>
       </Card>
 
-      {/* Add / Edit Student Modal */}
+      {/* View Student Modal */}
+      {viewStudent && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+        >
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', maxWidth: '480px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                Student Enrollment Details
+              </h3>
+              <button type="button" onClick={() => setViewStudent(null)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.8125rem' }}>
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>Full Name:</span>
+                <p style={{ fontWeight: 700, color: '#0f172a', margin: '0.15rem 0 0' }}>{viewStudent.user?.full_name}</p>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>USN / Roll Number:</span>
+                <p style={{ fontWeight: 700, color: '#ea580c', margin: '0.15rem 0 0', fontFamily: 'var(--font-mono)' }}>{viewStudent.roll_number}</p>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>Email:</span>
+                <p style={{ color: '#334155', margin: '0.15rem 0 0' }}>{viewStudent.user?.email}</p>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>Department:</span>
+                <p style={{ color: '#334155', margin: '0.15rem 0 0' }}>{viewStudent.department_name}</p>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>Course & Cohort:</span>
+                <p style={{ color: '#334155', margin: '0.15rem 0 0' }}>{viewStudent.course_name} — Sem {viewStudent.semester_number}, {viewStudent.section_name}</p>
+              </div>
+
+              <div>
+                <span style={{ fontWeight: 600, color: '#64748b' }}>Account Status:</span>
+                <div style={{ marginTop: '0.25rem' }}>
+                  <Badge variant={viewStudent.user?.is_active ? 'success' : 'danger'}>
+                    {viewStudent.user?.is_active ? 'Active & Enrolled' : 'Inactive'}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="outline" size="sm" onClick={() => setViewStudent(null)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Section Reassign Modal */}
+      {isBulkModalOpen && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem',
+          }}
+        >
+          <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', maxWidth: '440px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #e2e8f0', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                Bulk Assign Section
+              </h3>
+              <button type="button" onClick={() => setIsBulkModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {bulkSuccessMsg && (
+              <div style={{ padding: '0.75rem', backgroundColor: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '6px', color: '#166534', fontSize: '0.8125rem', marginBottom: '1rem' }}>
+                {bulkSuccessMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleBulkAssign}>
+              <p style={{ fontSize: '0.8125rem', color: '#475569', marginBottom: '1rem' }}>
+                Reassign <strong>{selectedStudentIds.length}</strong> selected students to a new section cohort:
+              </p>
+
+              <div style={{ marginBottom: '1.5rem' }}>
+                <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.35rem' }}>
+                  Target Section *
+                </label>
+                <select
+                  value={bulkSectionId}
+                  onChange={(e) => setBulkSectionId(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
+                >
+                  <option value="">Select Target Section</option>
+                  {sections.map((sec) => (
+                    <option key={sec.id} value={sec.id}>{sec.name} ({sec.room_number || 'Room TBD'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
+                <Button variant="outline" type="button" onClick={() => setIsBulkModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="primary" type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Reassigning...' : 'Confirm Assignment'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Student Modal (Issue 14 & 15 Hierarchy) */}
       {isModalOpen && (
         <div
           style={{
@@ -339,7 +606,7 @@ export const AdminStudentsPage: React.FC = () => {
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0' }}>
               <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a' }}>
-                {isEditing ? 'Edit Student Profile' : 'Enroll New Student'}
+                {isEditing ? 'Edit Student Enrollment' : 'Enroll New Student'}
               </h3>
               <button
                 type="button"
@@ -420,13 +687,13 @@ export const AdminStudentsPage: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
-                    Roll Number *
+                    USN / Roll Number *
                   </label>
                   <input
                     type="text"
                     placeholder="e.g. 2024CSE042"
                     value={rollNumber}
-                    onChange={(e) => setRollNumber(e.target.value)}
+                    onChange={(e) => setRollNumber(e.target.value.toUpperCase())}
                     required
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
                   />
@@ -434,18 +701,19 @@ export const AdminStudentsPage: React.FC = () => {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
-                    Register Number
+                    University Register Number
                   </label>
                   <input
                     type="text"
                     placeholder="e.g. REG-2024-8890"
                     value={registerNumber}
-                    onChange={(e) => setRegisterNumber(e.target.value)}
+                    onChange={(e) => setRegisterNumber(e.target.value.toUpperCase())}
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px' }}
                   />
                 </div>
               </div>
 
+              {/* Cascading Hierarchy: Department -> Course -> Semester -> Section (Issue 14 & 15) */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
@@ -453,11 +721,12 @@ export const AdminStudentsPage: React.FC = () => {
                   </label>
                   <select
                     value={deptId}
-                    onChange={(e) => setDeptId(e.target.value)}
+                    onChange={(e) => handleDeptChange(e.target.value)}
+                    required
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
                   >
                     {departments.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
                     ))}
                   </select>
                 </div>
@@ -468,10 +737,11 @@ export const AdminStudentsPage: React.FC = () => {
                   </label>
                   <select
                     value={courseId}
-                    onChange={(e) => setCourseId(e.target.value)}
+                    onChange={(e) => handleCourseChange(e.target.value)}
+                    required
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
                   >
-                    {courses.map((c) => (
+                    {formCourses.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -481,14 +751,15 @@ export const AdminStudentsPage: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
-                    Semester *
+                    Semester Term *
                   </label>
                   <select
                     value={semesterId}
-                    onChange={(e) => setSemesterId(e.target.value)}
+                    onChange={(e) => handleSemesterChange(e.target.value)}
+                    required
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
                   >
-                    {semesters.map((s) => (
+                    {formSemesters.map((s) => (
                       <option key={s.id} value={s.id}>Semester {s.semester_number} ({s.academic_year})</option>
                     ))}
                   </select>
@@ -496,14 +767,15 @@ export const AdminStudentsPage: React.FC = () => {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: '#334155', marginBottom: '0.25rem' }}>
-                    Section *
+                    Section Cohort *
                   </label>
                   <select
                     value={sectionId}
                     onChange={(e) => setSectionId(e.target.value)}
+                    required
                     style={{ width: '100%', padding: '0.5rem 0.75rem', fontSize: '0.8125rem', border: '1px solid #cbd5e1', borderRadius: '6px', backgroundColor: '#fff' }}
                   >
-                    {sections.map((sec) => (
+                    {formSections.map((sec) => (
                       <option key={sec.id} value={sec.id}>{sec.name}</option>
                     ))}
                   </select>

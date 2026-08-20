@@ -188,7 +188,9 @@ export const LoginPage: React.FC = () => {
     setIsLoading(false);
 
     if (res.success) {
-      setSuccessMessage('Account created successfully! Redirecting to your dashboard...');
+      setSuccessMessage('Account created successfully! Please sign in with your email and password.');
+      setMode('LOGIN');
+      setPassword('');
     } else {
       setFormError(res.error || 'Failed to create account. Please try again.');
     }

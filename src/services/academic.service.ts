@@ -55,6 +55,10 @@ class AcademicService {
     }
   }
 
+  async toggleDepartmentStatus(id: string, currentStatus: boolean): Promise<{ success: boolean; is_active?: boolean; error?: string }> {
+    return this.updateDepartment(id, { is_active: !currentStatus });
+  }
+
   // ── COURSES ──
   async getCourses(deptId?: string): Promise<Course[]> {
     try {
@@ -62,7 +66,10 @@ class AcademicService {
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
-        return json.courses || [];
+        return (json.courses || []).map((c: any) => ({
+          ...c,
+          department_name: c.department?.name,
+        }));
       }
     } catch (e) {
       console.error('getCourses error:', e);
@@ -83,6 +90,25 @@ class AcademicService {
     } catch (e: any) {
       return { success: false, error: e.message || 'Network error' };
     }
+  }
+
+  async updateCourse(id: string, data: { department_id?: string; code?: string; name?: string; degree_type?: string; total_semesters?: number; is_active?: boolean }): Promise<{ success: boolean; course?: Course; error?: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/courses/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) return { success: false, error: json.error || 'Failed to update course' };
+      return { success: true, course: json.course };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error' };
+    }
+  }
+
+  async toggleCourseStatus(id: string, currentStatus: boolean): Promise<{ success: boolean; is_active?: boolean; error?: string }> {
+    return this.updateCourse(id, { is_active: !currentStatus });
   }
 
   // ── SEMESTERS ──
@@ -175,6 +201,25 @@ class AcademicService {
     } catch (e: any) {
       return { success: false, error: e.message || 'Network error' };
     }
+  }
+
+  async updateSubject(id: string, data: { course_id?: string; semester_id?: string; code?: string; name?: string; subject_type?: string; credits?: number; total_hours?: number; is_active?: boolean }): Promise<{ success: boolean; subject?: Subject; error?: string }> {
+    try {
+      const res = await fetch(`${API_BASE}/admin/subjects/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) return { success: false, error: json.error || 'Failed to update subject' };
+      return { success: true, subject: json.subject };
+    } catch (e: any) {
+      return { success: false, error: e.message || 'Network error' };
+    }
+  }
+
+  async toggleSubjectStatus(id: string, currentStatus: boolean): Promise<{ success: boolean; is_active?: boolean; error?: string }> {
+    return this.updateSubject(id, { is_active: !currentStatus });
   }
 
   // ── FACULTY SUBJECT ASSIGNMENTS ──
